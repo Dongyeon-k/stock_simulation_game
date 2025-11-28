@@ -249,6 +249,22 @@
         background: rgba(15, 23, 42, 0.02);
       }
 
+      tbody tr:hover {
+        background: rgba(59, 130, 246, 0.05);
+      }
+
+      .account-stat {
+        padding: 16px;
+        background: var(--surface-muted);
+        border-radius: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .account-stat:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px -8px rgba(15, 23, 42, 0.2);
+      }
+
       #loadHint {
         font-size: 14px;
       }
@@ -400,18 +416,12 @@
       </div>
 
       <div class="card" id="trade" style="display: none; margin-top: 20px;">
-        <div class="row" style="justify-content: space-between; align-items: baseline;">
-          <div>
-            <h3 style="margin: 0 0 6px;">거래 입력</h3>
-            <small style="color: var(--text-muted);">
-              금액 단위(₩)로 입력하세요. 매수는 양수, 매도는 음수입니다.
-            </small>
-          </div>
-          <span id="lastUpdated" style="font-size: 13px; color: #64748b;"></span>
-        </div>
+        <h3 style="margin: 0 0 6px;">거래 가능한 종목</h3>
+        <small style="color: var(--text-muted);">
+          매수할 종목 옆에 금액(₩)을 입력하고 매수 버튼을 클릭하세요.
+        </small>
         <div id="prices" style="margin-top: 16px;"></div>
         <div class="row" style="margin-top: 18px;">
-          <button id="btnSubmit" class="btn-primary">저장하기</button>
           <button id="btnReset" type="button" class="btn-muted">입력 초기화</button>
         </div>
       </div>
@@ -431,12 +441,7 @@
       </div>
     </main>
 
-    <!-- 1) Firebase SDK (compat 버전) -->
-    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-
-    <!-- 2) 메인 로직 -->
-    <script src="/src/main.js"></script>
+    <!-- 메인 로직 -->
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,56 +1,74 @@
-## Stock Simulation Game (Firebase Edition)
+## Stock Simulation Game
 
-이 레포는 FastAPI 백엔드를 제거하고 **Firebase Authentication + Firestore**로 전면 이관된 버전입니다. 참가자는 아이디/비밀번호 조합으로 가입·로그인하고, 모든 자산/투자 기록은 Firestore에 저장됩니다.
-
----
-
-### 1. 선행 준비
-1. [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트를 생성합니다.
-2. 웹 앱을 등록하고 발급된 `firebaseConfig`를 `frontend/src/firebase.js`에 붙여넣습니다.
-3. 콘솔에서 다음 서비스를 활성화하세요.
-   - **Authentication** → 이메일/비밀번호 로그인 사용 설정
-   - **Cloud Firestore** → 데이터베이스 만들기 (개발 중에는 테스트 규칙, 배포 전에는 제한 규칙 적용)
-
-> 기본 관리자 토큰은 `changeme`이며, `meta/state` 문서의 `adminTokenHash` 필드를 업데이트하면 언제든 교체할 수 있습니다. 새 토큰을 정하면 SHA-256 해시를 구해 해당 필드에 저장하세요.
+주식 시뮬레이션 게임입니다. FastAPI 백엔드와 Vite 프론트엔드로 구성되어 있습니다.
 
 ---
 
-### 2. Firestore 구조
-```
-meta/state                  // currentDay, visibleTickers, adminTokenHash 등
-users/{USER_ID}             // cash, holdings 맵
-users/{USER_ID}/investments // Day별 저장 내역 (orders, savedAt)
+### 1. 백엔드 서버 실행
+
+백엔드 서버를 먼저 실행해야 합니다:
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-- 앱을 최초 실행하면 `meta/state`가 없을 경우 자동으로 생성되며 `currentDay=1`, `visibleTickers=6`, `adminTokenHash(=changeme)` 값을 갖습니다.
-- 가격 데이터는 `frontend/src/data/prices.js`에 포함되어 있으며, Firestore에는 저장하지 않습니다.
+또는 Python 모듈로 직접 실행:
+
+```bash
+cd backend
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+서버가 정상적으로 실행되면 `http://localhost:8000`에서 API를 사용할 수 있습니다.
+`http://localhost:8000/docs`에서 Swagger UI를 통해 API를 테스트할 수 있습니다.
 
 ---
 
-### 3. 로컬 개발
+### 2. 프론트엔드 실행
+
+새 터미널에서:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-- 브라우저에서 `http://localhost:5173` 접속 후 아이디/비밀번호로 가입/로그인하면 됩니다.
-- Firebase Authentication에는 `USER_ID@stocksimgame.local` 형태의 가상 이메일이 생성됩니다.
+브라우저에서 `http://localhost:5173` 접속 후 아이디/비밀번호로 가입/로그인하면 됩니다.
 
 ---
 
-### 4. 관리자 Day 전환
-1. 로그인 여부와 상관없이 관리자 토큰을 입력하고 **다음 Day로 이동** 버튼을 누르면 됩니다.
-2. 기본 토큰 `changeme` → SHA-256 해시 `057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86`.
-3. Day 값은 Firestore `meta/state.currentDay`에 저장되며, 5일차까지 미리 정의된 가격 데이터를 순차적으로 사용합니다.
+### 3. 데이터 구조
+
+- **백엔드**: `backend/db.json`에 사용자 계정, 자산, 투자 내역이 저장됩니다.
+- **가격 데이터**: `backend/prices.csv`에 일별 주식 가격이 저장됩니다.
 
 ---
 
-### 5. 배포
-- `firebase init hosting`으로 Hosting을 설정하고, `npm run build` 후 `firebase deploy --only hosting`을 실행하면 정적 사이트를 배포할 수 있습니다.
-- Firestore/Authentication 보안 규칙을 반드시 점검한 뒤 배포하세요.
+### 4. 관리자 기능
+
+기본 관리자 토큰은 `changeme`입니다. 환경변수 `ADMIN_TOKEN`으로 변경할 수 있습니다.
+
+관리자 콘솔에서 토큰을 입력하고 "다음 Day로 이동" 버튼을 클릭하면 게임이 다음 날로 진행됩니다.
 
 ---
 
-필요 시 Cloud Functions로 관리자 로직을 이전하거나 Firestore 규칙을 고도화하여 추가적인 보안을 적용할 수 있습니다. 문제가 있으면 이 README를 참고해 구성을 다시 확인해주세요.
+### 5. 환경 변수 (백엔드)
+
+- `ADMIN_TOKEN`: 관리자 토큰 (기본값: "changeme")
+- `INITIAL_CASH`: 초기 현금 (기본값: 10000000)
+- `VISIBLE_TICKERS`: 표시할 종목 수 (기본값: 6)
+
+---
+
+### 6. 배포
+
+프론트엔드 빌드:
+```bash
+npm run build
+```
+
+빌드된 파일은 `frontend/dist/` 폴더에 생성됩니다.
 
