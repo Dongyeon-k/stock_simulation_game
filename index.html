@@ -7,146 +7,436 @@
     <style>
       :root {
         color-scheme: light;
+        --bg: #f6f7fb;
+        --surface: #ffffff;
+        --surface-muted: #f0f4ff;
+        --border: rgba(15, 23, 42, 0.08);
+        --text: #0f172a;
+        --text-muted: #475569;
+        --primary: #3b82f6;
+        --primary-dark: #1d4ed8;
+        --accent: #f97316;
+        --radius: 16px;
+        --shadow: 0 20px 40px -24px rgba(15, 23, 42, 0.8);
       }
+
+      * {
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: system-ui, sans-serif;
-        max-width: 1080px;
-        margin: 0 auto;
-        padding: 24px;
-        background: #fafafa;
-        color: #222;
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", "Pretendard", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 45%),
+          radial-gradient(circle at 20% 20%, rgba(249, 115, 22, 0.18), transparent 40%),
+          var(--bg);
+        padding: 40px 16px 64px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
       }
+
+      body.login-screen {
+        align-items: center;
+        flex-direction: column;
+      }
+
+      body.login-screen header {
+        display: block;
+        margin-bottom: 48px;
+        animation: fadeInDown 0.6s ease-out;
+        width: 100%;
+        max-width: 600px;
+      }
+
+      body.login-screen main {
+        width: min(500px, 100%);
+      }
+
+      body.login-screen .cards-grid {
+        grid-template-columns: 1fr;
+      }
+
+      body.login-screen #loginCard {
+        animation: fadeInUp 0.6s ease-out 0.2s both;
+        box-shadow: 0 24px 48px -16px rgba(15, 23, 42, 0.4);
+      }
+
+      @keyframes fadeInDown {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      main {
+        width: min(1120px, 100%);
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+
       h1 {
-        margin-bottom: 12px;
+        margin: 0 0 8px;
+        font-size: clamp(28px, 4vw, 40px);
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
+
+      p.lead {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      .cards-grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      @media (min-width: 960px) {
+        .cards-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
       .card {
-        border: 1px solid #ddd;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 16px;
-        background: #fff;
-        box-shadow: 0 2px 4px rgb(15 23 42 / 4%);
+        border-radius: var(--radius);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 24px;
+        box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
       }
+
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: 12px;
+        border-radius: calc(var(--radius) - 8px);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        pointer-events: none;
+      }
+
+      .card h3 {
+        margin-top: 0;
+        margin-bottom: 16px;
+      }
+
       .row {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
+        gap: 16px;
       }
+
       label {
+        flex: 1;
+        min-width: 160px;
         display: flex;
         flex-direction: column;
         font-size: 14px;
-        gap: 4px;
+        color: var(--text-muted);
+        gap: 6px;
       }
+
       input {
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.15);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 15px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        font-weight: 500;
       }
+
+      input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+      }
+
       input[type="number"] {
         width: 140px;
         text-align: right;
       }
+
       button {
         border: none;
-        border-radius: 8px;
-        padding: 10px 18px;
+        border-radius: 12px;
+        padding: 12px 22px;
         font-size: 16px;
         font-weight: 600;
         cursor: pointer;
-        background: #2563eb;
-        color: white;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
       }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px -16px rgba(15, 23, 42, 0.8);
+      }
+
+      button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: none;
+      }
+
       button:disabled {
         opacity: 0.5;
         cursor: wait;
       }
+
+      .btn-primary {
+        background: linear-gradient(120deg, var(--primary), var(--primary-dark));
+        color: white;
+      }
+
+      .btn-dark {
+        background: #0f172a;
+        color: white;
+      }
+
+      .btn-muted {
+        background: var(--surface-muted);
+        color: var(--text);
+      }
+
       table {
         border-collapse: collapse;
         width: 100%;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
       }
+
       th,
       td {
-        border: 1px solid #eee;
-        padding: 8px 12px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        padding: 10px 12px;
         text-align: center;
+        font-size: 15px;
       }
+
       th {
-        background: #f1f5f9;
+        background: var(--surface-muted);
+        color: var(--text);
+        font-weight: 600;
       }
-      pre {
-        margin: 0;
+
+      tbody tr:nth-child(even) {
+        background: rgba(15, 23, 42, 0.02);
+      }
+
+      #loadHint {
+        font-size: 14px;
+      }
+
+      .hint-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--primary-dark);
+        padding: 6px 12px;
+        border-radius: 999px;
         font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 16px;
       }
-      .danger {
-        background: #fee2e2;
-        color: #b91c1c;
+
+      .login-features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 16px;
+        margin-top: 32px;
+        padding-top: 32px;
+        border-top: 1px solid var(--border);
+      }
+
+      .login-feature {
+        text-align: center;
+        padding: 16px;
+        border-radius: 12px;
+        background: var(--surface-muted);
+      }
+
+      .login-feature-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+        display: block;
+      }
+
+      .login-feature-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+
+      .login-feature-desc {
+        font-size: 11px;
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
+
+      body.login-screen .login-features {
+        display: grid;
+        animation: fadeInUp 0.6s ease-out 0.4s both;
+      }
+
+      .admin-card {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 64, 175, 0.92));
+        color: white;
+      }
+
+      .admin-card input,
+      .admin-card button,
+      .admin-card label {
+        color: inherit;
+      }
+
+      .admin-card input {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+      }
+
+      .admin-card button {
+        background: white;
+        color: #0f172a;
+      }
+
+      @media (max-width: 720px) {
+        .row {
+          flex-direction: column;
+        }
+        input[type="number"] {
+          width: 100%;
+          text-align: left;
+        }
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-C-JCfO1n.js"></script>
   </head>
   <body>
-    <h1>Stock Simulation Game</h1>
-    <p style="margin-top: 0; color: #475569;">
-      여섯 개 가상 종목에 투자하며 자산 변화를 확인하는 모의투자 게임입니다. 참가자는 매일 포트폴리오를 저장하고, 관리자가 Day를 전환합니다.
-    </p>
+    <main>
+      <header>
+        <div class="hint-badge">🎯 Mock Trading League</div>
+        <h1>Stock Simulation Game</h1>
+        <p class="lead">
+          여섯 개 가상 종목에 투자하며 매 라운드 자산 변화를 추적하세요. 하루에 한 번 투자 내역을 저장하고,
+          관리자가 Day를 전환하면 새로운 가격이 적용됩니다.
+        </p>
+        <div class="login-features">
+          <div class="login-feature">
+            <span class="login-feature-icon">📈</span>
+            <div class="login-feature-title">실시간 거래</div>
+            <div class="login-feature-desc">6개 종목 매수/매도</div>
+          </div>
+          <div class="login-feature">
+            <span class="login-feature-icon">💰</span>
+            <div class="login-feature-title">자산 관리</div>
+            <div class="login-feature-desc">포트폴리오 추적</div>
+          </div>
+          <div class="login-feature">
+            <span class="login-feature-icon">🎮</span>
+            <div class="login-feature-title">라운드제</div>
+            <div class="login-feature-desc">Day별 전략 수립</div>
+          </div>
+        </div>
+      </header>
 
-    <div class="card">
-      <h3>참가자 접속</h3>
-      <div class="row">
-        <label>
-          백엔드 URL
-          <input id="backendUrl" value="http://localhost:8000" autocomplete="url" />
-        </label>
-        <label>
-          사용자 ID
-          <input id="userId" placeholder="예: USER001" autocomplete="username" />
-        </label>
-        <label>
-          비밀번호
-          <input id="password" type="password" placeholder="8자 이상" autocomplete="current-password" />
-        </label>
-      </div>
-      <div class="row" style="margin-top: 12px;">
-        <button id="btnSignup" type="button" style="background: #0f172a;">가입하기</button>
-        <button id="btnLogin">로그인</button>
-        <button id="btnLogout" type="button" style="background: #94a3b8; color: #0f172a;">로그아웃</button>
-      </div>
-      <p id="loadHint" style="margin-top: 12px; font-size: 14px; color: #64748b;"></p>
-    </div>
+      <div class="cards-grid">
+        <div class="card" id="loginCard">
+          <h3>참가자 접속</h3>
+          <div class="row">
+            <label>
+              사용자 ID
+              <input id="userId" placeholder="예: USER001" autocomplete="username" />
+            </label>
+            <label>
+              비밀번호
+              <input id="password" type="password" placeholder="8자 이상" autocomplete="current-password" />
+            </label>
+          </div>
+          <p style="margin: 12px 0 0; font-size: 14px; color: var(--text-muted);">
+            입력한 아이디는 Firebase Auth 계정으로 보호되며, 비밀번호는 안전하게 저장됩니다.
+          </p>
+          <div class="row" style="margin-top: 20px;">
+            <button id="btnSignup" type="button" class="btn-dark">가입하기</button>
+            <button id="btnLogin" class="btn-primary">로그인</button>
+          </div>
+          <p id="loadHint" style="margin-top: 16px;"></p>
+        </div>
 
-    <div id="status" class="card">사용자 정보를 불러오면 현황이 나타납니다.</div>
+        <div id="status" class="card" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0;">현재 계좌 현황</h3>
+            <button id="btnLogout" type="button" class="btn-muted" style="display: none;">로그아웃</button>
+          </div>
+          <div id="statusContent">사용자 정보를 불러오면 현황이 나타납니다.</div>
+        </div>
+      </div>
 
-    <div id="trade" class="card" style="display: none;">
-      <div class="row" style="justify-content: space-between; align-items: baseline;">
-        <h3 style="margin: 0;">거래 입력</h3>
-        <span id="lastUpdated" style="font-size: 13px; color: #64748b;"></span>
+      <div class="card" id="trade" style="display: none; margin-top: 20px;">
+        <div class="row" style="justify-content: space-between; align-items: baseline;">
+          <div>
+            <h3 style="margin: 0 0 6px;">거래 입력</h3>
+            <small style="color: var(--text-muted);">
+              금액 단위(₩)로 입력하세요. 매수는 양수, 매도는 음수입니다.
+            </small>
+          </div>
+          <span id="lastUpdated" style="font-size: 13px; color: #64748b;"></span>
+        </div>
+        <div id="prices" style="margin-top: 16px;"></div>
+        <div class="row" style="margin-top: 18px;">
+          <button id="btnSubmit" class="btn-primary">저장하기</button>
+          <button id="btnReset" type="button" class="btn-muted">입력 초기화</button>
+        </div>
       </div>
-      <p style="font-size: 14px; color: #475569;">
-        금액 단위(₩)로 입력하세요. 매수는 양수, 매도는 음수입니다. <strong>저장하기</strong> 버튼을 누르면 해당 Day의 투자 내역이 기록됩니다.
-      </p>
-      <div id="prices"></div>
-      <div style="margin-top: 12px; display: flex; gap: 12px;">
-        <button id="btnSubmit">저장하기</button>
-        <button id="btnReset" type="button" style="background: #475569;">입력 초기화</button>
-      </div>
-    </div>
 
-    <div class="card">
-      <h3>관리자</h3>
-      <div class="row">
-        <label>
-          Admin Token
-          <input id="adminToken" type="password" placeholder="서버 ADMIN_TOKEN" autocomplete="off" />
-        </label>
-        <button id="btnNext">다음 Day로 이동</button>
+      <div class="card admin-card" id="adminCard" style="display: none; margin-top: 20px;">
+        <h3>관리자 콘솔</h3>
+        <div class="row">
+          <label>
+            Admin Token
+            <input id="adminToken" type="password" placeholder="서버 ADMIN_TOKEN" autocomplete="off" />
+          </label>
+          <button id="btnNext">다음 Day로 이동</button>
+        </div>
+        <p style="font-size: 14px; margin-top: 12px;">
+          관리자 기능은 게임 진행 전용입니다. 잘못 사용하면 참가자 자산이 즉시 변동됩니다.
+        </p>
       </div>
-      <p style="font-size: 14px; color: #b91c1c; margin-top: 12px;">
-        관리자 기능은 게임 진행 전용입니다. 잘못 사용하면 참가자 자산이 즉시 변동됩니다.
-      </p>
-    </div>
-
+    </main>
+
+    <!-- 1) Firebase SDK (compat 버전) -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+    <!-- 2) 메인 로직 -->
+    <script src="/src/main.js"></script>
   </body>
 </html>
