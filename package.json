@@ -1,0 +1,12 @@
+{
+  "name": "stock-simulation-game",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "deploy": "npm --prefix frontend run deploy",
+    "dev": "npm --prefix frontend run dev",
+    "frontend:install": "npm --prefix frontend install"
+  }
+}
+
