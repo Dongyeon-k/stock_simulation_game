@@ -1,6 +1,52 @@
 {
   "current_day": 1,
-  "users": {},
-  "accounts": {},
-  "investments": {}
+  "users": {
+    "DONGY5.KIM": {
+      "cash": 9989558.0,
+      "holdings": {
+        "AAA": 50.0,
+        "BBB": 43.025,
+        "CCC": 0.0,
+        "DDD": 0.0,
+        "EEE": 0.0,
+        "FFF": 21.05263157894737
+      }
+    }
+  },
+  "accounts": {
+    "DONGY5.KIM": {
+      "password_hash": "a2745cf719089ade8ce60feb93813ccfc09f6e469e4a2dd9ef554e676b0b49d4"
+    }
+  },
+  "investments": {
+    "DONGY5.KIM": [
+      {
+        "day": 1,
+        "orders": [
+          {
+            "ticker": "AAA",
+            "amount_krw": 5000.0
+          }
+        ]
+      },
+      {
+        "day": 1,
+        "orders": [
+          {
+            "ticker": "FFF",
+            "amount_krw": 2000.0
+          }
+        ]
+      },
+      {
+        "day": 1,
+        "orders": [
+          {
+            "ticker": "BBB",
+            "amount_krw": 3442.0
+          }
+        ]
+      }
+    ]
+  }
 }

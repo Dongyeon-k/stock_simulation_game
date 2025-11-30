@@ -1,7 +1,26 @@
 // src/main.js
 
-// 백엔드 API URL 설정
-// 백엔드 서버는 8000 포트에서 실행되어야 합니다
+import {
+  signUpWithUserId,
+  signInWithUserId,
+  signOutCurrentUser,
+  fetchDashboardState,
+  submitUserOrders,
+  isAdminAccount,
+  resetAllData,
+  resetAccountsOnly,
+  resetInvestmentsOnly,
+  resetAssetsOnly,
+  getAllUsersWithPortfolio,
+  deleteUser,
+  adjustUserAssets,
+  getRankings,
+  advanceDayWithToken,
+} from "./services/gameStore.js";
+import { auth } from "./firebase.js";
+import { onAuthStateChanged } from "firebase/auth";
+
+// 백엔드 API URL 설정 (백엔드 API 사용 시)
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // 초기 로그인 화면 스타일 적용
@@ -19,6 +38,7 @@ const statusCard = $("status");
 const tradeCard = $("trade");
 const loginCard = $("loginCard");
 const adminCard = $("adminCard");
+const adminDashboard = $("adminDashboard");
 const loadHint = $("loadHint");
 const pricesDiv = $("prices");
 const btnReset = $("btnReset");
@@ -28,6 +48,14 @@ let currentUser = null;
 let currentPassword = null;
 let currentState = null;
 let currentPrices = {};
+let isAdmin = false;
+
+// 이메일에서 userId 추출하는 함수
+function extractUserIdFromEmail(email) {
+  if (!email) return null;
+  const match = email.match(/^(.+)@stocksimgame\.local$/);
+  return match ? match[1].toUpperCase() : null;
+}
 
 // API 호출 헬퍼
 async function apiCall(endpoint, options = {}) {
@@ -98,10 +126,7 @@ btnSignup.onclick = async () => {
       return;
     }
 
-    await apiCall("/signup", {
-      method: "POST",
-      body: JSON.stringify({ user_id: userId, password }),
-    });
+    await signUpWithUserId(userId, password);
 
     alert("회원가입 완료! 로그인해주세요.");
     passwordInput.value = "";
@@ -125,14 +150,14 @@ btnLogin.onclick = async () => {
       return;
     }
 
-    const result = await apiCall("/login", {
-      method: "POST",
-      body: JSON.stringify({ user_id: userId, password }),
-    });
+    const normalizedUserId = await signInWithUserId(userId, password);
+    currentUser = normalizedUserId;
+    currentPassword = password;
+    isAdmin = isAdminAccount(normalizedUserId);
 
-    if (result.ok) {
-      currentUser = userId;
-      currentPassword = password;
+    if (isAdmin) {
+      await loadAdminDashboard();
+    } else {
       await loadDashboard();
     }
   } catch (err) {
@@ -144,56 +169,56 @@ btnLogin.onclick = async () => {
 };
 
 // 로그아웃
-btnLogout.onclick = () => {
+async function handleLogout() {
+  try {
+    await signOutCurrentUser();
+  } catch (err) {
+    console.error("로그아웃 오류:", err);
+  }
+  
   currentUser = null;
   currentPassword = null;
   currentState = null;
   currentPrices = {};
+  isAdmin = false;
   
   document.body.classList.add("login-screen");
   loginCard.style.display = "block";
   statusCard.style.display = "none";
   tradeCard.style.display = "none";
   adminCard.style.display = "none";
-  btnLogout.style.display = "none";
+  if (adminDashboard) adminDashboard.style.display = "none";
+  if (btnLogout) btnLogout.style.display = "none";
   userIdInput.value = "";
   passwordInput.value = "";
   setStatus("사용자 정보를 불러오면 현황이 나타납니다.");
-};
+}
+
+if (btnLogout) {
+  btnLogout.onclick = handleLogout;
+}
 
 // 대시보드 로드
 async function loadDashboard() {
   try {
     setLoading("정보를 불러오는 중...");
     
-    // 상태 조회
-    const state = await apiCall(`/state?user_id=${encodeURIComponent(currentUser)}`, {
-      headers: {
-        "x-auth-password": currentPassword,
-      },
-    });
-
+    const state = await fetchDashboardState(currentUser);
     currentState = state;
-
-    // 가격 조회
-    const pricesData = await apiCall(`/prices?day=${state.current_day}`);
-    currentPrices = pricesData.prices;
+    currentPrices = state.prices;
 
     // 화면 업데이트
     document.body.classList.remove("login-screen");
     loginCard.style.display = "none";
     statusCard.style.display = "block";
     tradeCard.style.display = "block";
-    btnLogout.style.display = "inline-block";
-    
-    // 관리자 카드는 항상 표시 (토큰 입력 후 사용)
-    if (adminCard) {
-      adminCard.style.display = "block";
-    }
+    if (btnLogout) btnLogout.style.display = "inline-block";
+    if (adminCard) adminCard.style.display = "block";
+    if (adminDashboard) adminDashboard.style.display = "none";
 
     renderAccountStatus(state);
     renderHoldings(state);
-    renderTradingSection(pricesData);
+    renderTradingSection(state);
 
     setLoading("");
   } catch (err) {
@@ -222,11 +247,11 @@ function renderAccountStatus(state) {
       </div>
       <div class="account-stat">
         <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">포트폴리오 가치</div>
-        <div style="font-size: 18px; font-weight: 600; color: var(--accent);">${user.portfolio_value.toLocaleString()} ₩</div>
+        <div style="font-size: 18px; font-weight: 600; color: var(--accent);">${user.portfolioValue.toLocaleString()} ₩</div>
       </div>
       <div class="account-stat">
         <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">현재 Day</div>
-        <div style="font-size: 18px; font-weight: 600;">Day ${currentState.current_day}</div>
+        <div style="font-size: 18px; font-weight: 600;">Day ${state.currentDay}</div>
       </div>
     </div>
   `;
@@ -235,7 +260,7 @@ function renderAccountStatus(state) {
   // 로그아웃 버튼 이벤트 재등록
   const logoutBtn = $("btnLogout");
   if (logoutBtn) {
-    logoutBtn.onclick = btnLogout.onclick;
+    logoutBtn.onclick = handleLogout;
   }
 }
 
@@ -307,8 +332,8 @@ function renderHoldings(state) {
 }
 
 // 거래 섹션 렌더링
-function renderTradingSection(pricesData) {
-  const prices = pricesData.prices;
+function renderTradingSection(state) {
+  const prices = state.prices;
   const html = `
     <div style="margin-top: 16px;">
       <table>
@@ -350,7 +375,7 @@ function renderTradingSection(pricesData) {
       </table>
     </div>
   `;
-  pricesDiv.innerHTML = html;
+  if (pricesDiv) pricesDiv.innerHTML = html;
 }
 
 // 매수 처리
@@ -366,16 +391,7 @@ window.handleBuy = async function(ticker) {
   try {
     setLoading("매수 주문 처리 중...");
     
-    await apiCall("/order", {
-      method: "POST",
-      headers: {
-        "x-auth-password": currentPassword,
-      },
-      body: JSON.stringify({
-        user_id: currentUser,
-        orders: [{ ticker, amount_krw: amount }],
-      }),
-    });
+    await submitUserOrders(currentUser, [{ ticker, amount_krw: amount }]);
 
     input.value = "";
     await loadDashboard();
@@ -401,16 +417,7 @@ window.handleSell = async function(ticker) {
   try {
     setLoading("매도 주문 처리 중...");
     
-    await apiCall("/order", {
-      method: "POST",
-      headers: {
-        "x-auth-password": currentPassword,
-      },
-      body: JSON.stringify({
-        user_id: currentUser,
-        orders: [{ ticker, amount_krw: -amount }],
-      }),
-    });
+    await submitUserOrders(currentUser, [{ ticker, amount_krw: -amount }]);
 
     input.value = "";
     await loadDashboard();
@@ -433,37 +440,383 @@ btnReset.onclick = () => {
   });
 };
 
-// 관리자 기능
-const adminTokenInput = $("adminToken");
-const btnNext = $("btnNext");
+// 관리자 대시보드 로드
+async function loadAdminDashboard() {
+  try {
+    setLoading("관리자 대시보드를 불러오는 중...");
+    
+    document.body.classList.remove("login-screen");
+    loginCard.style.display = "none";
+    statusCard.style.display = "none";
+    tradeCard.style.display = "none";
+    if (adminCard) adminCard.style.display = "none";
+    if (adminDashboard) adminDashboard.style.display = "block";
+    
+    // 사용자 목록과 순위 자동 로드
+    await refreshUsersList();
+    await showRankings();
+    
+    setLoading("");
+  } catch (err) {
+    console.error(err);
+    alert("관리자 대시보드를 불러오는데 실패했습니다: " + err.message);
+    setLoading("");
+  }
+}
 
-if (btnNext) {
-  btnNext.onclick = async () => {
-    const token = adminTokenInput?.value.trim();
-    if (!token) {
-      alert("관리자 토큰을 입력하세요.");
+// 관리자 기능 초기화
+function initAdminFunctions() {
+  const btnAdminLogout = $("btnAdminLogout");
+  const btnResetAll = $("btnResetAll");
+  const btnResetAccounts = $("btnResetAccounts");
+  const btnResetInvestments = $("btnResetInvestments");
+  const btnResetAssets = $("btnResetAssets");
+  const btnRefreshUsers = $("btnRefreshUsers");
+  const btnViewRankings = $("btnViewRankings");
+  const adminTokenInput = $("adminToken");
+  const btnNext = $("btnNext");
+
+  if (btnAdminLogout) {
+    btnAdminLogout.onclick = handleLogout;
+  }
+
+  if (btnResetAll) {
+    btnResetAll.onclick = async () => {
+      if (!confirm("⚠️ 경고: 모든 데이터를 삭제하시겠습니까?\n계정, 구매 내역, 자산 정보 등 모든 것이 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.")) {
+        return;
+      }
+      if (!confirm("정말로 모든 데이터를 삭제하시겠습니까?")) {
+        return;
+      }
+      try {
+        setLoading("전체 초기화 중...");
+        await resetAllData();
+        alert("전체 초기화가 완료되었습니다.");
+        await refreshUsersList();
+      } catch (err) {
+        console.error(err);
+        alert("초기화 실패: " + err.message);
+      } finally {
+        setLoading("");
+      }
+    };
+  }
+
+  if (btnResetAccounts) {
+    btnResetAccounts.onclick = async () => {
+      if (!confirm("⚠️ 경고: 모든 계정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+        return;
+      }
+      try {
+        setLoading("계정 삭제 중...");
+        await resetAccountsOnly();
+        alert("계정 삭제가 완료되었습니다.");
+        await refreshUsersList();
+      } catch (err) {
+        console.error(err);
+        alert("삭제 실패: " + err.message);
+      } finally {
+        setLoading("");
+      }
+    };
+  }
+
+  if (btnResetInvestments) {
+    btnResetInvestments.onclick = async () => {
+      if (!confirm("⚠️ 경고: 모든 구매 내역을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+        return;
+      }
+      try {
+        setLoading("구매 내역 삭제 중...");
+        await resetInvestmentsOnly();
+        alert("구매 내역 삭제가 완료되었습니다.");
+        await refreshUsersList();
+      } catch (err) {
+        console.error(err);
+        alert("삭제 실패: " + err.message);
+      } finally {
+        setLoading("");
+      }
+    };
+  }
+
+  if (btnResetAssets) {
+    btnResetAssets.onclick = async () => {
+      if (!confirm("⚠️ 경고: 모든 자산 정보를 초기화하시겠습니까?\n현금과 보유 종목이 초기값으로 돌아갑니다.\n이 작업은 되돌릴 수 없습니다.")) {
+        return;
+      }
+      try {
+        setLoading("자산 초기화 중...");
+        await resetAssetsOnly();
+        alert("자산 초기화가 완료되었습니다.");
+        await refreshUsersList();
+      } catch (err) {
+        console.error(err);
+        alert("초기화 실패: " + err.message);
+      } finally {
+        setLoading("");
+      }
+    };
+  }
+
+  if (btnRefreshUsers) {
+    btnRefreshUsers.onclick = async () => {
+      await refreshUsersList();
+    };
+  }
+
+  if (btnViewRankings) {
+    btnViewRankings.onclick = async () => {
+      await showRankings();
+    };
+  }
+
+  if (btnNext) {
+    btnNext.onclick = async () => {
+      const token = adminTokenInput?.value.trim();
+      if (!token) {
+        alert("관리자 토큰을 입력하세요.");
+        return;
+      }
+
+      try {
+        setLoading("Day를 진행하는 중...");
+        await advanceDayWithToken(token);
+        alert("다음 Day로 이동했습니다.");
+        if (adminTokenInput) adminTokenInput.value = "";
+        await refreshUsersList();
+        await showRankings();
+      } catch (err) {
+        console.error(err);
+        alert("Day 진행 실패: " + err.message);
+      } finally {
+        setLoading("");
+      }
+    };
+  }
+}
+
+// 사용자 목록 새로고침
+async function refreshUsersList() {
+  try {
+    setLoading("사용자 목록을 불러오는 중...");
+    const users = await getAllUsersWithPortfolio();
+    const usersListDiv = $("usersList");
+    
+    if (!usersListDiv) return;
+
+    if (users.length === 0) {
+      usersListDiv.innerHTML = '<p style="color: rgba(255,255,255,0.6);">등록된 사용자가 없습니다.</p>';
+      setLoading("");
       return;
     }
 
-    try {
-      setLoading("Day를 진행하는 중...");
-      await apiCall("/admin/advance", {
-        method: "POST",
-        headers: {
-          "x-admin-token": token,
-        },
-      });
-
-      if (currentUser) {
-        await loadDashboard();
-      }
-      alert("다음 Day로 이동했습니다.");
-      if (adminTokenInput) adminTokenInput.value = "";
-    } catch (err) {
-      console.error(err);
-      alert("Day 진행 실패: " + err.message);
-    } finally {
-      setLoading("");
-    }
-  };
+    const html = `
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 8px;">
+          <thead>
+            <tr>
+              <th style="color: white;">사용자 ID</th>
+              <th style="color: white;">보유 현금</th>
+              <th style="color: white;">평가 금액</th>
+              <th style="color: white;">보유 종목</th>
+              <th style="color: white;">작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map((user) => {
+              const holdingsList = Object.entries(user.holdings)
+                .filter(([_, qty]) => qty > 0)
+                .map(([ticker, qty]) => `${ticker}: ${qty.toFixed(2)}`)
+                .join(", ") || "없음";
+              
+              return `
+                <tr>
+                  <td style="color: white;"><strong>${user.userId}</strong></td>
+                  <td style="color: white;">${user.cash.toLocaleString()} ₩</td>
+                  <td style="color: #4ade80; font-weight: 600;">${user.portfolioValue.toLocaleString()} ₩</td>
+                  <td style="color: rgba(255,255,255,0.8); font-size: 13px;">${holdingsList}</td>
+                  <td>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button 
+                        class="btn-primary" 
+                        onclick="handleAdjustAssets('${user.userId}')"
+                        style="padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"
+                      >
+                        자산 조정
+                      </button>
+                      <button 
+                        class="btn-danger" 
+                        onclick="handleDeleteUser('${user.userId}')"
+                        style="padding: 6px 12px; font-size: 13px; background: #ff6b6b; color: white;"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+    
+    usersListDiv.innerHTML = html;
+    setLoading("");
+  } catch (err) {
+    console.error(err);
+    alert("사용자 목록을 불러오는데 실패했습니다: " + err.message);
+    setLoading("");
+  }
 }
+
+// 순위 보기
+async function showRankings() {
+  try {
+    setLoading("순위를 불러오는 중...");
+    const rankings = await getRankings();
+    const rankingsListDiv = $("rankingsList");
+    
+    if (!rankingsListDiv) return;
+
+    if (rankings.length === 0) {
+      rankingsListDiv.innerHTML = '<p style="color: rgba(255,255,255,0.6);">등록된 사용자가 없습니다.</p>';
+      setLoading("");
+      return;
+    }
+
+    const html = `
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; background: rgba(255,255,255,0.05); border-radius: 8px;">
+          <thead>
+            <tr>
+              <th style="color: white;">순위</th>
+              <th style="color: white;">사용자 ID</th>
+              <th style="color: white;">평가 금액</th>
+              <th style="color: white;">보유 현금</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rankings.map((item, index) => {
+              const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : "";
+              return `
+                <tr style="${index < 3 ? 'background: rgba(255,215,0,0.1);' : ''}">
+                  <td style="color: white; font-weight: 600;">
+                    ${medal} ${item.rank}위
+                  </td>
+                  <td style="color: white;"><strong>${item.userId}</strong></td>
+                  <td style="color: #4ade80; font-weight: 600; font-size: 16px;">${item.portfolioValue.toLocaleString()} ₩</td>
+                  <td style="color: rgba(255,255,255,0.8);">${item.cash.toLocaleString()} ₩</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+    
+    rankingsListDiv.innerHTML = html;
+    setLoading("");
+  } catch (err) {
+    console.error(err);
+    alert("순위를 불러오는데 실패했습니다: " + err.message);
+    setLoading("");
+  }
+}
+
+// 사용자 삭제 처리
+window.handleDeleteUser = async function(userId) {
+  if (!confirm(`사용자 "${userId}"를 정말 삭제하시겠습니까?\n계정과 모든 투자 내역이 삭제됩니다.`)) {
+    return;
+  }
+  
+  try {
+    setLoading("사용자 삭제 중...");
+    await deleteUser(userId);
+    alert("사용자가 삭제되었습니다.");
+    await refreshUsersList();
+    await showRankings();
+  } catch (err) {
+    console.error(err);
+    alert("삭제 실패: " + err.message);
+  } finally {
+    setLoading("");
+  }
+};
+
+// 자산 조정 처리
+window.handleAdjustAssets = async function(userId) {
+  const cashAdjustment = prompt(`${userId}의 현금을 조정하세요.\n양수: 추가, 음수: 차감\n예: 1000000 또는 -500000`);
+  if (cashAdjustment === null) return;
+  
+  const cashAdj = parseFloat(cashAdjustment);
+  if (isNaN(cashAdj)) {
+    alert("올바른 숫자를 입력하세요.");
+    return;
+  }
+
+  const holdingsInput = prompt(`${userId}의 보유 종목을 조정하세요.\n형식: TICKER:수량,TICKER:수량\n예: AAA:10,BBB:-5\n(양수: 추가, 음수: 차감)`);
+  let holdingsAdj = null;
+  
+  if (holdingsInput && holdingsInput.trim()) {
+    try {
+      holdingsAdj = {};
+      const pairs = holdingsInput.split(",");
+      pairs.forEach(pair => {
+        const [ticker, qty] = pair.trim().split(":");
+        if (ticker && qty) {
+          holdingsAdj[ticker.trim().toUpperCase()] = parseFloat(qty.trim());
+        }
+      });
+    } catch (err) {
+      alert("보유 종목 형식이 올바르지 않습니다.");
+      return;
+    }
+  }
+
+  try {
+    setLoading("자산 조정 중...");
+    await adjustUserAssets(userId, cashAdj, holdingsAdj);
+    alert("자산이 조정되었습니다.");
+    await refreshUsersList();
+    await showRankings();
+  } catch (err) {
+    console.error(err);
+    alert("자산 조정 실패: " + err.message);
+  } finally {
+    setLoading("");
+  }
+};
+
+// 인증 상태 복원 함수
+async function restoreAuthState() {
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, async (user) => {
+      if (user && user.email) {
+        const userId = extractUserIdFromEmail(user.email);
+        if (userId) {
+          currentUser = userId;
+          isAdmin = isAdminAccount(userId);
+          
+          try {
+            if (isAdmin) {
+              await loadAdminDashboard();
+            } else {
+              await loadDashboard();
+            }
+          } catch (err) {
+            console.error("인증 상태 복원 실패:", err);
+            // 복원 실패 시 로그인 화면 유지
+            handleLogout();
+          }
+        }
+      }
+      resolve();
+    });
+  });
+}
+
+// 페이지 로드 시 관리자 기능 초기화 및 인증 상태 복원
+initAdminFunctions();
+restoreAuthState();

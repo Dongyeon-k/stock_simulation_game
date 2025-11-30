@@ -16,6 +16,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from "firebase/firestore";
 
 import { auth, db } from "../firebase";
@@ -30,6 +31,9 @@ import { sha256Hex } from "../utils/hash";
 
 const DEFAULT_ADMIN_TOKEN_HASH = "057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86";
 const MAX_INVESTMENT_HISTORY = 30;
+
+// 관리자 비밀번호 (환경변수로 설정 가능, 기본값: "top081800!")
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "top081800!";
 
 const stateRef = () => doc(db, "meta", "state");
 const userRef = (userId) => doc(db, "users", userId);
@@ -132,6 +136,12 @@ export async function signUpWithUserId(userId, password) {
   if (!normalized) {
     throw new Error("아이디를 입력해주세요.");
   }
+  
+  // ADMIN 계정은 회원가입 불가
+  if (normalized === "ADMIN") {
+    throw new Error("관리자 계정은 회원가입할 수 없습니다.");
+  }
+  
   await createUserWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
   const state = await ensureStateDocument();
   await ensureUserPortfolio(normalized, state.currentDay, state.visibleTickers);
@@ -143,9 +153,48 @@ export async function signInWithUserId(userId, password) {
   if (!normalized) {
     throw new Error("아이디를 입력해주세요.");
   }
-  await signInWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
+  
+  // ADMIN 계정인 경우 특정 비밀번호만 허용
+  if (normalized === "ADMIN") {
+    if (password !== ADMIN_PASSWORD) {
+      throw new Error("관리자 비밀번호가 올바르지 않습니다.");
+    }
+    
+    // ADMIN 계정이 Firebase Auth에 없으면 생성
+    try {
+      await signInWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
+    } catch (error) {
+      // 계정이 없거나 인증 실패 시 생성 시도
+      const errorCode = error?.code || "";
+      if (
+        errorCode === "auth/user-not-found" ||
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/wrong-password"
+      ) {
+        try {
+          await createUserWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
+        } catch (createError) {
+          // 이미 존재하는 경우 다시 로그인 시도
+          if (createError?.code === "auth/email-already-in-use") {
+            await signInWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
+          } else {
+            throw createError;
+          }
+        }
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    // 일반 사용자는 기존 로직
+    await signInWithEmailAndPassword(auth, pseudoEmailFor(normalized), password);
+  }
+  
   const state = await ensureStateDocument();
-  await ensureUserPortfolio(normalized, state.currentDay, state.visibleTickers);
+  // ADMIN 계정은 포트폴리오 생성하지 않음
+  if (normalized !== "ADMIN") {
+    await ensureUserPortfolio(normalized, state.currentDay, state.visibleTickers);
+  }
   return normalized;
 }
 
@@ -281,5 +330,205 @@ export async function advanceDayWithToken(token) {
 
 export function getDefinedDays() {
   return Object.keys(PRICES_BY_DAY).map(Number).sort((a, b) => a - b);
+}
+
+// 관리자 계정 확인
+export function isAdminAccount(userId) {
+  return normalizeUserId(userId) === "ADMIN";
+}
+
+// 전체 초기화 - Firestore의 모든 데이터 삭제
+export async function resetAllData() {
+  const batch = writeBatch(db);
+  
+  // 모든 사용자 조회
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  
+  // 각 사용자의 투자 내역 삭제
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    if (userId === "ADMIN") continue; // 관리자 계정은 제외
+    
+    const investmentsSnapshot = await getDocs(investmentsCol(userId));
+    investmentsSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    // 사용자 문서 삭제
+    batch.delete(userDoc.ref);
+  }
+  
+  // meta/state 문서 삭제
+  const stateDoc = await getDoc(stateRef());
+  if (stateDoc.exists()) {
+    batch.delete(stateDoc.ref);
+  }
+  
+  await batch.commit();
+}
+
+// 계정만 삭제 (투자 내역과 자산 정보는 유지)
+export async function resetAccountsOnly() {
+  const batch = writeBatch(db);
+  
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    if (userId === "ADMIN") continue; // 관리자 계정은 제외
+    batch.delete(userDoc.ref);
+  }
+  
+  await batch.commit();
+}
+
+// 구매 내역만 삭제
+export async function resetInvestmentsOnly() {
+  const batch = writeBatch(db);
+  
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    if (userId === "ADMIN") continue; // 관리자 계정은 제외
+    
+    const investmentsSnapshot = await getDocs(investmentsCol(userId));
+    investmentsSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+  }
+  
+  await batch.commit();
+}
+
+// 자산 정보만 초기화 (현금을 초기값으로, 보유 종목을 0으로)
+export async function resetAssetsOnly() {
+  const stateDoc = await ensureStateDocument();
+  const { currentDay, visibleTickers = DEFAULT_VISIBLE_TICKERS } = stateDoc;
+  const prices = getVisiblePrices(currentDay, visibleTickers);
+  const tickers = Object.keys(prices);
+  
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  
+  const batch = writeBatch(db);
+  
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    if (userId === "ADMIN") continue; // 관리자 계정은 제외
+    
+    const holdings = Object.fromEntries(tickers.map((ticker) => [ticker, 0]));
+    batch.update(userDoc.ref, {
+      cash: INITIAL_CASH,
+      holdings,
+      updatedAt: serverTimestamp(),
+    });
+  }
+  
+  await batch.commit();
+}
+
+// 모든 사용자 목록 조회 (평가 금액 포함)
+export async function getAllUsersWithPortfolio() {
+  const stateDoc = await ensureStateDocument();
+  const { currentDay, visibleTickers = DEFAULT_VISIBLE_TICKERS } = stateDoc;
+  const prices = getVisiblePrices(currentDay, visibleTickers);
+  
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  const users = [];
+  
+  for (const userDoc of usersSnapshot.docs) {
+    const userId = userDoc.id;
+    if (userId === "ADMIN") continue; // 관리자 계정 제외
+    
+    const userData = userDoc.data();
+    const portfolioValue = calculatePortfolioValue(userData, prices);
+    
+    users.push({
+      userId,
+      cash: userData.cash ?? INITIAL_CASH,
+      holdings: userData.holdings || {},
+      portfolioValue,
+      createdAt: userData.createdAt?.toDate?.() || null,
+      updatedAt: userData.updatedAt?.toDate?.() || null,
+    });
+  }
+  
+  // 포트폴리오 가치 기준 내림차순 정렬
+  users.sort((a, b) => b.portfolioValue - a.portfolioValue);
+  
+  return users;
+}
+
+// 특정 사용자 삭제
+export async function deleteUser(userId) {
+  const normalized = normalizeUserId(userId);
+  if (normalized === "ADMIN") {
+    throw new Error("관리자 계정은 삭제할 수 없습니다.");
+  }
+  
+  const batch = writeBatch(db);
+  
+  // 사용자의 투자 내역 삭제
+  const investmentsSnapshot = await getDocs(investmentsCol(normalized));
+  investmentsSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  
+  // 사용자 문서 삭제
+  const userDocRef = userRef(normalized);
+  batch.delete(userDocRef);
+  
+  await batch.commit();
+}
+
+// 사용자 자산 조정
+export async function adjustUserAssets(userId, cashAdjustment, holdingsAdjustment) {
+  const normalized = normalizeUserId(userId);
+  if (normalized === "ADMIN") {
+    throw new Error("관리자 계정의 자산은 조정할 수 없습니다.");
+  }
+  
+  const ref = userRef(normalized);
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists()) {
+      throw new Error("사용자를 찾을 수 없습니다.");
+    }
+    
+    const data = snap.data();
+    const currentCash = data.cash ?? INITIAL_CASH;
+    const currentHoldings = { ...(data.holdings || {}) };
+    
+    // 현금 조정
+    const newCash = cashAdjustment !== undefined 
+      ? Math.max(0, currentCash + cashAdjustment)
+      : currentCash;
+    
+    // 보유 종목 조정
+    const newHoldings = { ...currentHoldings };
+    if (holdingsAdjustment) {
+      Object.entries(holdingsAdjustment).forEach(([ticker, adjustment]) => {
+        const currentQty = newHoldings[ticker] || 0;
+        newHoldings[ticker] = Math.max(0, currentQty + adjustment);
+      });
+    }
+    
+    txn.update(ref, {
+      cash: Math.round(newCash * 100) / 100,
+      holdings: newHoldings,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+// 순위 조회
+export async function getRankings() {
+  const users = await getAllUsersWithPortfolio();
+  return users.map((user, index) => ({
+    rank: index + 1,
+    userId: user.userId,
+    portfolioValue: user.portfolioValue,
+    cash: user.cash,
+    holdings: user.holdings,
+  }));
 }
 
