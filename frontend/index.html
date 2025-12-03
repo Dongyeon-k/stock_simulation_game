@@ -269,6 +269,33 @@
         font-size: 14px;
       }
 
+      #loginMessage {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        line-height: 1.5;
+        min-height: 20px;
+      }
+
+      #loginMessage.error {
+        background: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+      }
+
+      #loginMessage.success {
+        background: rgba(34, 197, 94, 0.1);
+        color: #16a34a;
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+
+      #loginMessage.info {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563eb;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+      }
+
       .hint-badge {
         display: inline-flex;
         align-items: center;
@@ -403,9 +430,234 @@
           text-align: left;
         }
       }
+
+      /* 로딩 화면 스타일 */
+      #authLoadingScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      #authLoadingScreen.hidden {
+        display: none;
+      }
+
+      .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(59, 130, 246, 0.2);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 20px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes fadeOut {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .loading-message {
+        font-size: 16px;
+        color: var(--text-muted);
+        font-weight: 500;
+        text-align: center;
+      }
+
+      /* 토스트 메시지 스타일 */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        pointer-events: none;
+      }
+
+      .toast {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+        min-width: 300px;
+        max-width: 500px;
+        pointer-events: auto;
+        animation: toastSlideIn 0.3s ease-out;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .toast.success {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.3);
+        color: #16a34a;
+      }
+
+      .toast.error {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #dc2626;
+      }
+
+      .toast.info {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: rgba(59, 130, 246, 0.3);
+        color: #2563eb;
+      }
+
+      .toast.warning {
+        background: rgba(249, 115, 22, 0.1);
+        border-color: rgba(249, 115, 22, 0.3);
+        color: #ea580c;
+      }
+
+      @keyframes toastSlideIn {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes toastSlideOut {
+        from {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        to {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+      }
+
+      .toast.slide-out {
+        animation: toastSlideOut 0.3s ease-out forwards;
+      }
+
+      /* 모달 스타일 */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 20000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fadeIn 0.2s ease-out;
+      }
+
+      .modal {
+        background: var(--surface);
+        border-radius: var(--radius);
+        padding: 24px;
+        max-width: 500px;
+        width: 100%;
+        box-shadow: 0 24px 48px rgba(15, 23, 42, 0.4);
+        animation: modalSlideIn 0.3s ease-out;
+        border: 1px solid var(--border);
+      }
+
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .modal h3 {
+        margin-top: 0;
+        margin-bottom: 16px;
+        font-size: 20px;
+      }
+
+      .modal p {
+        margin: 0 0 24px;
+        color: var(--text-muted);
+        line-height: 1.6;
+        white-space: pre-line;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .modal input {
+        width: 100%;
+        margin-bottom: 20px;
+      }
+
+      .modal label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
+    <!-- 인증 정보 조회 중 로딩 화면 -->
+    <div id="authLoadingScreen">
+      <div class="loading-spinner"></div>
+      <div class="loading-message">사용자 인증 정보를 조회 중입니다...</div>
+    </div>
+
     <main>
       <header>
         <div class="hint-badge">🎯 Mock Trading League</div>
@@ -454,11 +706,12 @@
             <button id="btnLogin" class="btn-primary">로그인</button>
           </div>
           <p id="loadHint" style="margin-top: 16px;"></p>
+          <div id="loginMessage"></div>
         </div>
+      </div>
 
-        <div id="status" class="card" style="display: none;">
-          <div id="statusContent">사용자 정보를 불러오면 현황이 나타납니다.</div>
-        </div>
+      <div id="status" class="card" style="display: none; margin-top: 20px;">
+        <div id="statusContent">사용자 정보를 불러오면 현황이 나타납니다.</div>
       </div>
 
       <div class="card" id="trade" style="display: none; margin-top: 20px;">
@@ -492,6 +745,25 @@
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
             <h2 style="margin: 0; color: white;">관리자 대시보드</h2>
             <button id="btnAdminLogout" class="btn-primary" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">로그아웃</button>
+          </div>
+          
+          <!-- Day 관리 섹션 -->
+          <div class="admin-section" style="margin-bottom: 32px; padding: 20px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <h3 style="margin-top: 0; color: #4ade80;">📅 Day 관리</h3>
+            <div style="margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <div style="flex: 1;">
+                  <div style="color: rgba(255,255,255,0.8); font-size: 14px; margin-bottom: 8px;">현재 Day</div>
+                  <div id="currentDayDisplay" style="font-size: 24px; font-weight: 700; color: #4ade80;">Day 1</div>
+                </div>
+                <button id="btnAdvanceDay" class="btn-primary" style="background: #4ade80; color: white; padding: 12px 24px; font-size: 16px; font-weight: 600; border: none;">
+                  ⏭️ 다음 Day로 이동
+                </button>
+              </div>
+              <p style="color: rgba(255,255,255,0.7); font-size: 13px; margin: 0;">
+                Day를 넘기면 모든 사용자 화면이 자동으로 새로고침되어 새로운 주식 가격이 표시됩니다.
+              </p>
+            </div>
           </div>
           
           <!-- 전체 초기화 섹션 -->
@@ -532,6 +804,9 @@
         </div>
       </div>
     </main>
+
+    <!-- 토스트 메시지 컨테이너 -->
+    <div id="toastContainer" class="toast-container"></div>
 
     <!-- 메인 로직 -->
     <script type="module" src="/src/main.js"></script>

@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 인증된 사용자 확인
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 관리자 계정 확인 (대소문자 구분 없음)
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email != null &&
+             request.auth.token.email.matches('(?i)^admin@stocksimgame\\.local$');
+    }
+    
+    // 현재 사용자의 이메일
+    function userEmail() {
+      return request.auth.token.email;
+    }
+    
+    // 사용자 ID 추출 (이메일에서 @ 앞부분)
+    function currentUserId() {
+      return userEmail().split('@')[0];
+    }
+    
+    // 메타 데이터 (게임 상태) - 모든 인증된 사용자 읽기 가능, 관리자만 쓰기
+    match /meta/state {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // 사용자 계정 정보
+    match /users/{userId} {
+      // 본인 문서 접근 (대소문자 구분 없이 비교)
+      function isOwner() {
+        return isAuthenticated() && 
+               (currentUserId().matches('(?i)' + userId) || 
+                userId.matches('(?i)' + currentUserId()));
+      }
+      
+      // 본인만 읽고 쓸 수 있음
+      allow read, write: if isOwner();
+      
+      // 관리자는 모든 사용자 정보 읽기/쓰기 가능 (컬렉션 전체 조회 포함)
+      allow read, write: if isAdmin();
+      
+      // 투자 내역 (서브 컬렉션)
+      match /investments/{investmentId} {
+        // 본인만 읽고 쓸 수 있음
+        allow read, write: if isOwner();
+        
+        // 관리자는 모든 투자 내역 읽기/쓰기 가능
+        allow read, write: if isAdmin();
+      }
+    }
+  }
+}

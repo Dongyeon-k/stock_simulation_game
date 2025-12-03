@@ -2,6 +2,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  deleteUser as deleteAuthUser,
+  getAuth,
 } from "firebase/auth";
 import {
   addDoc,
@@ -11,6 +13,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
@@ -19,7 +22,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-import { auth, db } from "../firebase";
+import { auth, db, functions } from "../firebase";
+import { httpsCallable } from "firebase/functions";
 import {
   DEFAULT_VISIBLE_TICKERS,
   getVisiblePrices,
@@ -63,7 +67,7 @@ function calculatePortfolioValue(userData, prices) {
   return Math.round(total * 100) / 100;
 }
 
-async function ensureStateDocument() {
+export async function ensureStateDocument() {
   const ref = stateRef();
   const snap = await getDoc(ref);
   if (snap.exists()) {
@@ -71,7 +75,7 @@ async function ensureStateDocument() {
   }
 
   const defaults = {
-    currentDay: 1,
+    currentDay: 0,
     visibleTickers: DEFAULT_VISIBLE_TICKERS,
     initialCash: INITIAL_CASH,
     adminTokenHash: DEFAULT_ADMIN_TOKEN_HASH,
@@ -120,6 +124,14 @@ async function fetchLastInvestment(userId) {
   if (snapshot.empty) return null;
   const docSnap = snapshot.docs[0];
   return { id: docSnap.id, ...docSnap.data() };
+}
+
+// 모든 투자 내역 조회 (Day별 포트폴리오 가치 계산용)
+export async function fetchAllInvestments(userId) {
+  const normalized = normalizeUserId(userId);
+  const q = query(investmentsCol(normalized), orderBy("savedAt", "asc"));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function trimInvestmentHistory(userId) {
@@ -233,6 +245,12 @@ export async function submitUserOrders(userId, orders) {
   const normalized = normalizeUserId(userId);
   const stateDoc = await ensureStateDocument();
   const { currentDay, visibleTickers = DEFAULT_VISIBLE_TICKERS } = stateDoc;
+  
+  // Day 0에서는 거래 불가
+  if (currentDay === 0) {
+    throw new Error("Day 0에서는 거래할 수 없습니다. 주식 종목과 가격만 확인할 수 있습니다.");
+  }
+  
   const prices = getVisiblePrices(currentDay, visibleTickers);
 
   await ensureUserPortfolio(normalized, currentDay, visibleTickers);
@@ -297,7 +315,7 @@ export async function advanceDayWithToken(token) {
     const state = snap.exists()
       ? snap.data()
       : {
-          currentDay: 1,
+          currentDay: 0,
           visibleTickers: DEFAULT_VISIBLE_TICKERS,
           adminTokenHash: DEFAULT_ADMIN_TOKEN_HASH,
         };
@@ -307,7 +325,7 @@ export async function advanceDayWithToken(token) {
       throw new Error("관리자 토큰이 올바르지 않습니다.");
     }
 
-    const candidateDay = (state.currentDay || 1) + 1;
+    const candidateDay = (state.currentDay ?? 0) + 1;
     if (candidateDay > LAST_AVAILABLE_DAY) {
       throw new Error("더 이상 정의된 Day가 없습니다.");
     }
@@ -337,7 +355,48 @@ export function isAdminAccount(userId) {
   return normalizeUserId(userId) === "ADMIN";
 }
 
-// 전체 초기화 - Firestore의 모든 데이터 삭제
+// 관리자 계정으로 Day 넘기기 (토큰 불필요, 관리자 계정으로 로그인한 경우만 사용)
+export async function advanceDayAsAdmin(userId) {
+  const normalized = normalizeUserId(userId);
+  
+  // 관리자 계정 확인
+  if (normalized !== "ADMIN") {
+    throw new Error("관리자 계정만 Day를 넘길 수 있습니다.");
+  }
+
+  const nextDay = await runTransaction(db, async (txn) => {
+    const ref = stateRef();
+    const snap = await txn.get(ref);
+    const state = snap.exists()
+      ? snap.data()
+      : {
+          currentDay: 0,
+          visibleTickers: DEFAULT_VISIBLE_TICKERS,
+          adminTokenHash: DEFAULT_ADMIN_TOKEN_HASH,
+        };
+
+    const candidateDay = (state.currentDay ?? 0) + 1;
+    if (candidateDay > LAST_AVAILABLE_DAY) {
+      throw new Error("더 이상 정의된 Day가 없습니다.");
+    }
+
+    txn.set(
+      ref,
+      {
+        ...state,
+        currentDay: candidateDay,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return candidateDay;
+  });
+
+  return nextDay;
+}
+
+// 전체 초기화 - Firestore의 모든 데이터 삭제 및 Day를 1로 초기화, Auth 계정도 삭제
 export async function resetAllData() {
   const batch = writeBatch(db);
   
@@ -357,13 +416,42 @@ export async function resetAllData() {
     batch.delete(userDoc.ref);
   }
   
-  // meta/state 문서 삭제
-  const stateDoc = await getDoc(stateRef());
-  if (stateDoc.exists()) {
-    batch.delete(stateDoc.ref);
-  }
+  // meta/state 문서를 Day 0로 초기화
+  const stateRefDoc = stateRef();
+  batch.set(stateRefDoc, {
+    currentDay: 0,
+    visibleTickers: DEFAULT_VISIBLE_TICKERS,
+    initialCash: INITIAL_CASH,
+    adminTokenHash: DEFAULT_ADMIN_TOKEN_HASH,
+    updatedAt: serverTimestamp(),
+  }, { merge: false }); // merge: false로 완전히 새로 생성
   
   await batch.commit();
+  
+  // Firebase Auth 계정도 삭제 (ADMIN 제외)
+  try {
+    // 현재 인증 상태 확인
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("인증된 사용자가 없습니다. 다시 로그인해주세요.");
+    }
+    
+    console.log("현재 로그인한 사용자:", currentUser.email);
+    const deleteAllUsers = httpsCallable(functions, "deleteAllUsers");
+    const result = await deleteAllUsers({});
+    console.log("Auth 계정 삭제 결과:", result.data);
+    return result.data;
+  } catch (error) {
+    console.error("Auth 계정 삭제 실패:", error);
+    console.error("에러 상세:", {
+      code: error.code,
+      message: error.message,
+      details: error.details
+    });
+    // Auth 삭제 실패해도 Firestore 삭제는 완료되었으므로 에러를 던지지 않음
+    // 대신 경고만 로그
+    throw new Error(`Firestore 데이터는 삭제되었지만, Auth 계정 삭제 중 오류가 발생했습니다: ${error.message}`);
+  }
 }
 
 // 계정만 삭제 (투자 내역과 자산 정보는 유지)
@@ -458,7 +546,7 @@ export async function getAllUsersWithPortfolio() {
   return users;
 }
 
-// 특정 사용자 삭제
+// 특정 사용자 삭제 (Firestore만)
 export async function deleteUser(userId) {
   const normalized = normalizeUserId(userId);
   if (normalized === "ADMIN") {
@@ -478,6 +566,16 @@ export async function deleteUser(userId) {
   batch.delete(userDocRef);
   
   await batch.commit();
+}
+
+// 현재 로그인한 사용자의 Firebase Auth 계정 삭제
+export async function deleteCurrentUserAuth() {
+  const currentAuth = getAuth();
+  const user = currentAuth.currentUser;
+  if (!user) {
+    throw new Error("로그인한 사용자가 없습니다.");
+  }
+  await deleteAuthUser(user);
 }
 
 // 사용자 자산 조정
@@ -530,5 +628,39 @@ export async function getRankings() {
     cash: user.cash,
     holdings: user.holdings,
   }));
+}
+
+// 상태 변경 실시간 감시 (Day 변경 등)
+// onStateChange 함수는 콜백 함수를 받아서, 상태가 변경될 때 호출합니다.
+// 반환값은 unsubscribe 함수입니다.
+export function watchStateChange(onChange) {
+  const ref = stateRef();
+  let lastDay = null;
+  let isFirstSnapshot = true;
+  
+  return onSnapshot(ref, (snapshot) => {
+    if (!snapshot.exists()) {
+      return;
+    }
+    
+    const state = snapshot.data();
+    const currentDay = state.currentDay ?? 0;
+    
+    // 첫 번째 스냅샷에서는 lastDay를 현재 Day로 설정만 하고 콜백 호출 안 함
+    if (isFirstSnapshot) {
+      lastDay = currentDay;
+      isFirstSnapshot = false;
+      return;
+    }
+    
+    // Day가 변경된 경우에만 콜백 호출
+    if (lastDay !== null && lastDay !== currentDay) {
+      onChange(currentDay, lastDay);
+    }
+    
+    lastDay = currentDay;
+  }, (error) => {
+    console.error("상태 감시 오류:", error);
+  });
 }
 

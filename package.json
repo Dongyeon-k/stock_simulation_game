@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "build": "npm --prefix frontend run build",
-    "deploy": "npm --prefix frontend run deploy",
+    "deploy": "firebase deploy",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:rules": "firebase deploy --only firestore:rules",
     "dev": "npm --prefix frontend run dev",
-    "frontend:install": "npm --prefix frontend install"
+    "frontend:install": "npm --prefix frontend install",
+    "predeploy": "npm run build"
   }
 }
 

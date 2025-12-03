@@ -2,6 +2,18 @@ export const INITIAL_CASH = 10_000_000;
 export const DEFAULT_VISIBLE_TICKERS = 6;
 
 export const PRICES_BY_DAY = {
+  0: {
+    AAA: 90,
+    BBB: 70,
+    CCC: 90,
+    DDD: 10,
+    EEE: 130,
+    FFF: 80,
+    GGG: 50,
+    HHH: 40,
+    III: 60,
+    JJJ: 170,
+  },
   1: {
     AAA: 100,
     BBB: 80,
